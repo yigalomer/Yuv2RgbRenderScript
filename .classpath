@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="src" path="gen"/>
+	<classpathentry exported="true" kind="con" path="com.android.ide.eclipse.adt.LIBRARIES"/>
+	<classpathentry exported="true" kind="con" path="com.android.ide.eclipse.adt.DEPENDENCIES"/>
+	<classpathentry exported="true" kind="lib" path="/Android/eclipse/adt-bundle-mac-x86_64-20130522/sdk/build-tools/18.1.0/renderscript/lib/renderscript-v8.jar"/>
+	<classpathentry kind="lib" path="/Android/eclipse/adt-bundle-mac-x86_64-20130522/sdk/platforms/android-15/android.jar">
+		<attributes>
+			<attribute name="javadoc_location" value="file:/Android/eclipse/adt-bundle-mac-x86_64-20130522/sdk/docs/reference"/>
+		</attributes>
+		<accessrules>
+			<accessrule kind="nonaccessible" pattern="com/android/internal/**"/>
+		</accessrules>
+	</classpathentry>
+	<classpathentry kind="con" path="com.android.ide.eclipse.adt.ANDROID_FRAMEWORK"/>
+	<classpathentry kind="output" path="bin/classes"/>
+</classpath>
