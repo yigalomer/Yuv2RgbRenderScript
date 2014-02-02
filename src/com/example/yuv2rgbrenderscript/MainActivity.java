@@ -38,8 +38,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	private static final String TAG = "MainActivity";
 
 	private Camera mCamera;
-	//private CameraPreview mPreview;
-	//private PictureCallback mPicture ;
 	private RenderScript mRs ;
 
 	private SurfaceHolder mHolder;
@@ -47,7 +45,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	private int mBufferSize ;
 
 	private SurfaceView mPreview;
-	//private ImageView mNormalImage, mBlurImage, mColorImage;
+
+	private int mFrameCount;
 
 
 
@@ -59,12 +58,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-
-
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
-
-
 
 		mRs = RenderScript.create(this); 
 
@@ -86,21 +81,16 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 		if (mCamera == null) {
 
-
 			try {
-				mCamera = Camera.open(); // attempt to get a Camera instance
+				// get the Camera instance
+				mCamera = Camera.open(); 
 			}
 			catch (Exception e){
 				// Camera is not available (in use or does not exist)
 				Log.d(TAG, "Camera is not available");
 				return ;
 			}
-
-
-			mCamera.setPreviewCallback(null);
-
-
-
+			//mCamera.setPreviewCallback(null);
 		}
 	}
 
@@ -109,15 +99,11 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		super.onPause();
 
 		if (mCamera != null) {
-			mCamera.setPreviewCallback(null);
-			//mPreview.getHolder().removeCallback(mPreview);
+			//mCamera.setPreviewCallback(null);
 			mCamera.setPreviewCallbackWithBuffer(null);
 			mHolder.removeCallback(this);
 			mCamera.release();
-
-
 			mCamera = null;
-			//mPreview = null ;
 		}
 	}
 
@@ -141,22 +127,19 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 					throw new UnsupportedOperationException();
 				}
 
+				// Buffer size in bytes W * H * 4
 				mBufferSize = previewSize.width * previewSize.height * ImageFormat.getBitsPerPixel(imageFormat) / 8;
-
+				// Allocate one buffer for the preview usage
 				byte[] mCallbackBuffer = new byte[mBufferSize];
 
 				mCamera.setPreviewCallbackWithBuffer(null);
 				mCamera.setPreviewCallbackWithBuffer(this); 
 				mCamera.addCallbackBuffer(mCallbackBuffer);
 
-
 				mPreview.setWillNotDraw(false);
 				mCamera.setPreviewDisplay(holder);
+				// Start the camera preview
 				mCamera.startPreview();
-
-				//mCamera.setPreviewCallback(this);
-				//mBlurImage = (ImageView) findViewById(R.id.blur_preview);
-				//mBlurImage.setVisibility(View.GONE);
 
 			}
 
@@ -166,42 +149,11 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	}
 
 
-	private class ProcessPreviewDataTask extends AsyncTask<byte[], Void, Bitmap> {
-
-		protected Bitmap doInBackground(byte[]... args) {
-			byte[] data = args[0];
-			//Size imageSize = args[1];
-
-			Camera.Parameters parameters = mCamera.getParameters();	    		
-			Size imageSize = parameters.getPreviewSize() ;
-
-			//Bitmap rgbBitmap = convertYuvToRgb(data,imageSize);
-			Bitmap rgbBitmap = convertYuvToRgbIntrinsic(data,imageSize );
-
-			Bitmap blurBitmap = applyBlurEffectIntrinsic(rgbBitmap,imageSize );
-			
-			Bitmap grayScaleBitmap = applyGrayScaleEffectIntrinsic(blurBitmap, imageSize);
 
 
-			//canvas.drawBitmap(rgbBitmap, x, y, null) ;
-
-			//mCamera.addCallbackBuffer(data);
-			//mProcessInProgress = false;
-			return grayScaleBitmap ;
-		}
-
-		protected void onPostExecute(Bitmap blurBitmap) {
-			
-			// invalidate();
-			ImageView image = new ImageView(getApplicationContext());
-			image.setImageBitmap(blurBitmap) ;
-			setContentView(image) ;
-
-		}
-
-	}
-
-
+	// Method is called for each frame in the camera preview.
+	// We'll convert the frame data (byte[] data) from YUV to RGB and apply 
+	// some effect like blur or gray scale
 	@Override
 	public void onPreviewFrame(byte[] data, Camera camera) {
 
@@ -209,83 +161,50 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 			return;
 		}
 
-		int expectedBytes = mBufferSize ;
-
-		if (expectedBytes != data.length) {
-			Log.e(TAG, "Mismatched size of buffer! Expected ");
-			mCamera.setPreviewCallbackWithBuffer(null);
+		// Skip some preview frames for better performance
+		if (mFrameCount % 2 != 0) {
+			camera.addCallbackBuffer(data);
+			mFrameCount++;
 			return;
 		}
 
+		int expectedBytes = mBufferSize ;
+		if (expectedBytes != data.length) {
+			Log.e(TAG, "Mismatched size of buffer!  ");
+			return;
+		}
+
+		mFrameCount++;
 		Canvas canvas = null;
 
 		//canvas = mHolder.lockCanvas();
 		try {
-			//synchronized (mHolder) {
+
+			// lockCanvas returns null and throws an exception - might be an android issue - http://stackoverflow.com/search?q=SurfaceHolder.lockCanvas%28%29+returns+null
+			// Would be better to draw directly on the preview canvas... instead using an imageView to draw 
 			//canvas = mHolder.lockCanvas();
 
 			Camera.Parameters parameters = mCamera.getParameters();	    		
 			Size imageSize = parameters.getPreviewSize() ;
-			// Bitmap rgbBitmap = convertYuvToRgb(data,imageSize);
+
+			Bitmap rgbBitmap = convertYuvToRgb(data,imageSize);
+
 
 			//Bitmap rgbBitmap = convertYuvToRgbIntrinsic(data,imageSize );
 
-			//TEST TEST
-			// Bitmap inBitmap = BitmapFactory.decodeByteArray(data, 0, data.length) ;
+			//Bitmap grayScaleBitmap = applyGrayScaleEffectIntrinsic(rgbBitmap, imageSize);
 
-			// Bitmap inBitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-			//Bitmap mutableBitmap = inBitmap.copy (Bitmap.Config.ARGB_8888, true);
-
-			//	            Bitmap inBitmap=null; 
-			//	            ByteArrayInputStream bytes = new ByteArrayInputStream(data); 
-			//	            BitmapDrawable bmd = new BitmapDrawable(bytes); 
-			//	            inBitmap = bmd.getBitmap(); 
-
-			//ByteArrayInputStream imageStream = new ByteArrayInputStream(data);
-			//Bitmap inBitmap = BitmapFactory.decodeStream(imageStream);
-
-			//TEST TEST
+			Bitmap blurBitmap = applyBlurEffectIntrinsic(rgbBitmap,imageSize );
 
 
+			// Create an ImageView and put the output bitmap after manipulation (blur or gray scale) into it
+			// and then display that imageView 
+			ImageView image = new ImageView(this);
+			image.setImageBitmap(blurBitmap) ;
+			setContentView(image) ;
 
-			//Bitmap blurBitmap = applyBlurEffectIntrinsic(rgbBitmap,imageSize );
-
-
-
-			//Make the image greyscale
-			//	            final ScriptIntrinsicColorMatrix scriptColor =ScriptIntrinsicColorMatrix.create(rs, Element.U8_4(rs));
-			//	            scriptColor.setGreyscale();
-			//	            scriptColor.forEach(input, output);
-			//	            output.copyTo(grayBitmap);
-
-
-			//ImageView image = new ImageView(this);
-
-			//mBlurImage.setVisibility(View.VISIBLE);
-
-
-			//mBlurImage.setImageBitmap(blurBitmap) ;
-
-			//			ImageView image = new ImageView(this);
-			//			image.setImageBitmap(blurBitmap) ;
-			//			setContentView(image) ;
-
-
-			new ProcessPreviewDataTask().execute(data);
-
-			//Camera.Parameters parameters = mCamera.getParameters();
-			//Size size = parameters.getPreviewSize();
-
-			//mRgb = new int[size.width * size.height];
-			//Yuv420.decode(data, mRgb, size.width, size.height);
-
-			//canvas.drawBitmap(rgbBitmap, x, y, null) ;
-
-			//canvas.drawBitmap(mRgb, 0, size.width, x, y, size.width, size.height, false, null);
-			//}
-
-			// canvas.drawBitmap(rgb, 0, size.width, x, y, size.width, size.height, false, paint);
-			// drawBitmap (int[] colors, int offset, int stride, float x, float y, int width, int height, boolean hasAlpha, Paint paint)
+			//new PreviewAsyncTask().execute(data);// didn't see improvements when running in Async task
+			//canvas.drawBitmap(rgbBitmap, 0f, 0f, null) ;
 
 		}   finally {
 			if (canvas != null) {
@@ -299,16 +218,17 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 
 
-
-
 	public void surfaceDestroyed(SurfaceHolder holder) {
 
-		//    	   this.getHolder().removeCallback(this);
-		//    	   if (mCamera != null) {
-		//    		   mCamera.stopPreview();
-		//    		   mCamera.release();
-		//    	   }
 
+		//		if (mCamera != null) {
+		//			mCamera.setPreviewCallbackWithBuffer(null);
+		//			mCamera.release();
+		//			mCamera = null;
+		//		}
+		//		if (holder != null){
+		//			mHolder.removeCallback(this);
+		//		}
 	}
 
 
@@ -332,21 +252,19 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	}
 
 
-
-
 	private Bitmap applyGrayScaleEffectIntrinsic(Bitmap inBitmap, Size imageSize) {
 
 		Bitmap grayBitmap = inBitmap.copy(inBitmap.getConfig(), true);
 
 		Allocation aIn = Allocation.createFromBitmap(mRs, inBitmap,Allocation.MipmapControl.MIPMAP_NONE, Allocation.USAGE_SCRIPT);
 		Allocation aOut = Allocation.createTyped(mRs, aIn.getType());
-		
-		//Make the image greyscale
-		final ScriptIntrinsicColorMatrix scriptColor =ScriptIntrinsicColorMatrix.create(mRs, Element.U8_4(mRs));
+
+		//Make the image grey scale
+		final ScriptIntrinsicColorMatrix scriptColor = ScriptIntrinsicColorMatrix.create(mRs, Element.U8_4(mRs));
 		scriptColor.setGreyscale();
 		scriptColor.forEach(aIn, aOut);
 		aOut.copyTo(grayBitmap);
-		
+
 		return grayBitmap ;
 
 	}
@@ -357,7 +275,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	private Bitmap applyBlurEffectIntrinsic(Bitmap inBitmap, Size imageSize) {
 
 		Bitmap outBitmap = inBitmap.copy(inBitmap.getConfig(), true);
-		// Bitmap grayBitmap = inBitmap.copy(inBitmap.getConfig(), true);
 
 		Allocation aIn = Allocation.createFromBitmap(mRs, inBitmap,Allocation.MipmapControl.MIPMAP_NONE, Allocation.USAGE_SCRIPT);
 		Allocation aOut = Allocation.createTyped(mRs, aIn.getType());
@@ -373,6 +290,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	}
 
 
+	// Convert to RGB using Intrinsic render script
 	private Bitmap convertYuvToRgbIntrinsic(byte[] data, Size imageSize) {
 
 		int imageWidth = imageSize.width ;
@@ -380,29 +298,32 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 		ScriptIntrinsicYuvToRGB yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(mRs, Element.RGBA_8888(mRs));
 
-
+		// Create the input allocation
 		Type.Builder yuvType = new Type.Builder(mRs, Element.U8(mRs))
 		.setX(imageWidth)
 		.setY(imageHeight)
 		.setYuvFormat(android.graphics.ImageFormat.NV21);
-		
+
 		Allocation aIn = Allocation.createTyped(mRs, yuvType.create(), Allocation.USAGE_SCRIPT);
+		// Set the YUV frame data into the input allocation
+		aIn.copyFrom(data);
 
 
-		Type.Builder rgbaType = new Type.Builder(mRs, Element.RGBA_8888(mRs))
+		// Create the output allocation
+		Type.Builder rgbType = new Type.Builder(mRs, Element.RGBA_8888(mRs))
 		.setX(imageWidth)
 		.setY(imageHeight);
 
-		Allocation aOut = Allocation.createTyped(mRs, rgbaType.create(), Allocation.USAGE_SCRIPT);
+		Allocation aOut = Allocation.createTyped(mRs, rgbType.create(), Allocation.USAGE_SCRIPT);
 
-		aIn.copyFrom(data);
+
 
 		yuvToRgbIntrinsic.setInput(aIn);
+		// Run the script for every pixel on the input allocation and put the result in aOut
 		yuvToRgbIntrinsic.forEach(aOut);
 
+		// Create an output bitmap and copy the result into that bitmap
 		Bitmap outBitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888);
-
-		// Bitmap bmpout = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888);
 		aOut.copyTo(outBitmap);
 
 		return outBitmap ;
@@ -411,52 +332,78 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 
 
-	// Convert to RGB using render script
+	// Convert to RGB using render script - with Yuv2Rgb.rs
 	protected Bitmap convertYuvToRgb(byte[] data, Size imageSize) {
 
 		int imageWidth = imageSize.width ;
 		int imageHeight = imageSize.height ;
 
-		Type.Builder tbIn = new Type.Builder(mRs, Element.U8(mRs));
-		tbIn.setX(imageWidth);
-		tbIn.setY(imageHeight);
-		tbIn.setYuvFormat(ImageFormat.NV21);
-
-		Type.Builder tb = new Type.Builder(mRs, Element.createPixel(mRs, Element.DataType.UNSIGNED_8, Element.DataKind.PIXEL_YUV));
-		//Type.Builder tb = new Type.Builder(mRs, Element.U8(mRs));
-		tb.setX(imageWidth);
-		tb.setY(imageHeight);
-		tb.setMipmaps(false);
-		tb.setYuvFormat(ImageFormat.NV21);
-		Allocation ain = Allocation.createTyped(mRs, tb.create(), Allocation.USAGE_SCRIPT);
+		// Input allocation
+		Type.Builder yuvType = new Type.Builder(mRs, Element.createPixel(mRs, Element.DataType.UNSIGNED_8, Element.DataKind.PIXEL_YUV))
+		.setX(imageWidth)
+		.setY(imageHeight)
+		.setMipmaps(false)
+		.setYuvFormat(ImageFormat.NV21);
+		Allocation ain = Allocation.createTyped(mRs, yuvType.create(), Allocation.USAGE_SCRIPT);
 		ain.copyFrom(data);
 
 
-		Type.Builder tbo = new Type.Builder(mRs, Element.RGBA_8888(mRs));
-		tbo.setX(imageWidth);
-		tbo.setY(imageHeight);
-		tbo.setMipmaps(false);
+		// output allocation
+		Type.Builder rgbType = new Type.Builder(mRs, Element.RGBA_8888(mRs))
+		.setX(imageWidth)
+		.setY(imageHeight)
+		.setMipmaps(false);
 
-		Allocation aOut = Allocation.createTyped(mRs, tbo.create(), Allocation.USAGE_SCRIPT);
-
-		Type.Builder tbOut = new Type.Builder(mRs, Element.RGBA_8888(mRs));
-		tbOut.setX(imageWidth); 
-		tbOut.setY(imageHeight);
+		Allocation aOut = Allocation.createTyped(mRs, rgbType.create(), Allocation.USAGE_SCRIPT);
 
 
 		// Create the script 
 		ScriptC_Yuv2Rgb yuvScript = new ScriptC_Yuv2Rgb(mRs); 
-		// Bind to script level
+		// Bind to script level -  set the allocation input and parameters from the java into the script level (thru JNI)
 		yuvScript.set_gIn(ain);
 		yuvScript.set_width(imageWidth);
 		yuvScript.set_height(imageHeight);
 
+		// invoke the script conversion method
 		yuvScript.forEach_yuvToRgb(ain, aOut);
 
 		Bitmap outBitmap = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888);
 		aOut.copyTo(outBitmap) ;
 
 		return outBitmap ;
+
+	}
+
+
+	// Not using that for now
+	private class PreviewAsyncTask extends AsyncTask<byte[], Void, Bitmap> {
+
+		protected Bitmap doInBackground(byte[]... args) {
+			byte[] data = args[0];
+
+			Camera.Parameters parameters = mCamera.getParameters();	    		
+			Size imageSize = parameters.getPreviewSize() ;
+
+			//Bitmap rgbBitmap = convertYuvToRgb(data,imageSize);
+			Bitmap rgbBitmap = convertYuvToRgbIntrinsic(data,imageSize );
+			Bitmap blurBitmap = applyBlurEffectIntrinsic(rgbBitmap,imageSize );
+			Bitmap grayScaleBitmap = applyGrayScaleEffectIntrinsic(blurBitmap, imageSize);
+
+
+			//canvas.drawBitmap(rgbBitmap, x, y, null) ;
+
+			//mCamera.addCallbackBuffer(data);
+			return grayScaleBitmap ;
+		}
+
+		protected void onPostExecute(Bitmap blurBitmap) {
+
+			// invalidate();
+			ImageView image = new ImageView(getApplicationContext());
+			image.setImageBitmap(blurBitmap) ;
+			setContentView(image) ;
+
+		}
 
 	}
 
