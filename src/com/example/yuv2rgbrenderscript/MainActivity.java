@@ -3,6 +3,7 @@ package com.example.yuv2rgbrenderscript;
 import java.io.IOException;
 
 import android.app.Activity;
+import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.ImageFormat;
@@ -10,13 +11,7 @@ import android.hardware.Camera;
 import android.hardware.Camera.Size;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.support.v8.renderscript.Allocation;
-import android.support.v8.renderscript.Element;
 import android.support.v8.renderscript.RenderScript;
-import android.support.v8.renderscript.ScriptIntrinsicBlur;
-import android.support.v8.renderscript.ScriptIntrinsicColorMatrix;
-import android.support.v8.renderscript.ScriptIntrinsicYuvToRGB;
-import android.support.v8.renderscript.Type;
 import android.util.Log;
 import android.view.Menu;
 import android.view.SurfaceHolder;
@@ -24,12 +19,6 @@ import android.view.SurfaceView;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
-//import android.renderscript.Allocation;
-//import android.renderscript.Element;
-//import android.renderscript.RenderScript;
-//import android.renderscript.Type;
-
-
 
 
 public class MainActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback{
@@ -51,8 +40,13 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	protected void onCreate(Bundle savedInstanceState) {
 
 		// Hide the window title.
+		final Window window = getWindow();
 		requestWindowFeature(Window.FEATURE_NO_TITLE);
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+		setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+		window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+		window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
 
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
@@ -64,9 +58,8 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		mHolder = mPreview.getHolder();
 		mHolder.addCallback(this);
 		// deprecated setting, but required on Android versions prior to 3.0
-		//mHolder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);//SURFACE_TYPE_NORMAL
-		mHolder.setType(SurfaceHolder.SURFACE_TYPE_HARDWARE);//SURFACE_TYPE_NORMAL
-
+		mHolder.setType(SurfaceHolder.SURFACE_TYPE_NORMAL);
+		//mHolder.setType(SurfaceHolder.SURFACE_TYPE_HARDWARE);//SURFACE_TYPE_NORMAL
 	}
 
 
@@ -150,56 +143,50 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	// onPreviewFrame is called for each frame at the camera preview.
 	// We'll convert each frame data (byte[] data) from YUV to RGB and apply 
 	// some effect like blur or gray scale
-	
-	@Override
-	public void onPreviewFrame(byte[] data, Camera camera) {
 
-		if (data == null || mHolder == null) {
+	@Override
+	public void onPreviewFrame(byte[] yuvFrame, Camera camera) {
+
+		if (yuvFrame == null || mHolder == null) {
 			return;
 		}
-
-		// Skip some preview frames for better performance
+		// Skip some preview frames for better performance in preview
 		if (mFrameCount % 2 != 0) {
-			camera.addCallbackBuffer(data);
+			camera.addCallbackBuffer(yuvFrame);
 			mFrameCount++;
 			return;
 		}
-
 		int expectedBytes = mBufferSize ;
-		if (expectedBytes != data.length) {
+		if (expectedBytes != yuvFrame.length) {
 			Log.e(TAG, "Mismatched size of buffer!  ");
 			return;
 		}
 
 		mFrameCount++;
 		Canvas canvas = null;
-
-		//canvas = mHolder.lockCanvas();
+		
 		try {
 
 			// lockCanvas returns null and throws an exception - might be an android issue - http://stackoverflow.com/search?q=SurfaceHolder.lockCanvas%28%29+returns+null
-			// Would be better to draw directly on the preview canvas... instead using an imageView to draw 
-			//canvas = mHolder.lockCanvas();
+			// Would be better to draw directly on the preview canvas instead of using an imageView ...
+			//canvas = mHolder.lockCanvas(null);
 
 			Camera.Parameters parameters = mCamera.getParameters();	    		
 			Size imageSize = parameters.getPreviewSize() ;
 
 			//Bitmap rgbBitmap = RenderScriptHelper.convertYuvToRgb(mRs,data,imageSize);
+			Bitmap rgbBitmap = RenderScriptHelper.convertYuvToRgbIntrinsic(mRs,yuvFrame,imageSize );
+			//Bitmap grayScaleBitmap = RenderScriptHelper.applyGrayScaleEffectIntrinsic(mRs,rgbBitmap, imageSize);
+			Bitmap blurBitmap = RenderScriptHelper.applyBlurEffectIntrinsic(mRs,rgbBitmap,imageSize );
 
-			Bitmap rgbBitmap = RenderScriptHelper.convertYuvToRgbIntrinsic(mRs,data,imageSize );
-
-			Bitmap grayScaleBitmap = RenderScriptHelper.applyGrayScaleEffectIntrinsic(mRs,rgbBitmap, imageSize);
-												
-			//Bitmap blurBitmap = RenderScriptHelper.applyBlurEffectIntrinsic(mRs,rgbBitmap,imageSize );
-
-
-			// Create an ImageView and put the output bitmap after manipulation (blur or gray scale) into it
-			// and then display that imageView 
+			// Create an ImageView and set the output bitmap after manipulation (blur or gray scale) into it
 			ImageView image = new ImageView(this);
-			image.setImageBitmap(grayScaleBitmap) ;
+			image.setImageBitmap(blurBitmap) ;
+			// display the imageView 
 			setContentView(image) ;
 
-			//new PreviewAsyncTask().execute(data);// didn't see improvements when running in Async task
+			//new PreviewAsyncTask().execute(data);// didn't see any improvement when running in Async task
+			
 			//canvas.drawBitmap(rgbBitmap, 0f, 0f, null) ;
 
 		}   finally {
@@ -208,7 +195,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 			}
 		}
 
-		camera.addCallbackBuffer(data);
+		camera.addCallbackBuffer(yuvFrame);
 
 	}
 
@@ -216,14 +203,11 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 	public void surfaceDestroyed(SurfaceHolder holder) {
 
-
+		// is called when calling setContentView, so for now disable it
 		//		if (mCamera != null) {
 		//			mCamera.setPreviewCallbackWithBuffer(null);
 		//			mCamera.release();
 		//			mCamera = null;
-		//		}
-		//		if (holder != null){
-		//			mHolder.removeCallback(this);
 		//		}
 	}
 
@@ -238,7 +222,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		try {
 			// stop preview before making changes
 			mCamera.stopPreview();
-
 			mCamera.setPreviewDisplay(mHolder);
 			mCamera.startPreview();
 
@@ -249,12 +232,16 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 
 
-	
-	
-	
-	
-	
-	
+
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		// Inflate the menu; this adds items to the action bar if it is present.
+		getMenuInflater().inflate(R.menu.main, menu);
+
+		return true;
+	}
+
 
 
 	// Not using that for now
@@ -270,17 +257,11 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 			Bitmap rgbBitmap = RenderScriptHelper.convertYuvToRgbIntrinsic(mRs,data,imageSize );
 			Bitmap blurBitmap = RenderScriptHelper.applyBlurEffectIntrinsic(mRs,rgbBitmap,imageSize );
 			Bitmap grayScaleBitmap = RenderScriptHelper.applyGrayScaleEffectIntrinsic(mRs,blurBitmap, imageSize);
-
-
-			//canvas.drawBitmap(rgbBitmap, x, y, null) ;
-
-			//mCamera.addCallbackBuffer(data);
 			return grayScaleBitmap ;
 		}
 
 		protected void onPostExecute(Bitmap blurBitmap) {
 
-			// invalidate();
 			ImageView image = new ImageView(getApplicationContext());
 			image.setImageBitmap(blurBitmap) ;
 			setContentView(image) ;
@@ -289,14 +270,6 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 	}
 
-
-	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		// Inflate the menu; this adds items to the action bar if it is present.
-		getMenuInflater().inflate(R.menu.main, menu);
-
-		return true;
-	}
 
 
 

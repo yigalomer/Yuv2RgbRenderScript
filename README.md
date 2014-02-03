@@ -1,3 +1,3 @@
 Yuv2RgbRenderScript
 ===================
-Get the camera preview image and apply a blur effect using render script
+Sample application that gets the camera preview frame and apply a blur effect using render script

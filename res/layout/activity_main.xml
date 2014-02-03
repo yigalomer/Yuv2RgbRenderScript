@@ -4,23 +4,13 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity" >
 
-    <LinearLayout
-        android:layout_width="fill_parent"
-        android:layout_height="fill_parent"
-        android:orientation="vertical" >
-
+ 
         <SurfaceView
             android:id="@+id/camera_preview"
             android:layout_width="fill_parent"
             android:layout_height="fill_parent" />
-<!-- 
-        <ImageView
-            android:id="@+id/blur_preview"
-            android:layout_width="fill_parent"
-            android:layout_height="313dp" />
-         -->
-    </LinearLayout>
 
+  
     <!--
          <FrameLayout
         android:id="@+id/camera_preview"
