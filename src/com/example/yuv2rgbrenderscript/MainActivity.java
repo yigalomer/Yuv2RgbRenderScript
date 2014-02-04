@@ -3,6 +3,7 @@ package com.example.yuv2rgbrenderscript;
 import java.io.IOException;
 
 import android.app.Activity;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -21,7 +22,8 @@ import android.view.WindowManager;
 import android.widget.ImageView;
 
 
-public class MainActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback{
+public class MainActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback, 
+	SharedPreferences.OnSharedPreferenceChangeListener {
 
 
 	private static final String TAG = "MainActivity";
@@ -32,6 +34,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 	private int mBufferSize ;
 	private SurfaceView mPreview;
 	private int mFrameCount;
+	private String mViewType  ;
 
 
 
@@ -51,6 +54,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 
+		mCamera = Camera.open();
 		mRs = RenderScript.create(this); 
 
 		mPreview = (SurfaceView) findViewById(R.id.camera_preview);
@@ -58,7 +62,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		mHolder = mPreview.getHolder();
 		mHolder.addCallback(this);
 		// deprecated setting, but required on Android versions prior to 3.0
-		mHolder.setType(SurfaceHolder.SURFACE_TYPE_NORMAL);
+		//mHolder.setType(SurfaceHolder.SURFACE_TYPE_NORMAL);
 		//mHolder.setType(SurfaceHolder.SURFACE_TYPE_HARDWARE);//SURFACE_TYPE_NORMAL
 	}
 
@@ -79,6 +83,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 				Log.d(TAG, "Camera is not available");
 				return ;
 			}
+			
 			//mCamera.setPreviewCallback(null);
 		}
 	}
@@ -107,6 +112,14 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 				Camera.Parameters parameters = mCamera.getParameters();
 
+//				List<int[]> list = parameters.getSupportedPreviewFpsRange();
+//				int minFps = list.get(0)[0] ;
+//				int maxFps = list.get(0)[1] ;
+//				parameters.setPreviewFpsRange (minFps, maxFps) ;
+//				mCamera.setParameters(parameters) ;
+
+				
+				
 				//List<Integer> list =  parameters.getSupportedPictureFormats() ;
 				Size previewSize = parameters.getPreviewSize();
 
@@ -125,7 +138,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 				mCamera.setPreviewCallbackWithBuffer(this); 
 				mCamera.addCallbackBuffer(mCallbackBuffer);
 
-				mPreview.setWillNotDraw(false);
+				//mPreview.setWillNotDraw(false);
 				mCamera.setPreviewDisplay(holder);
 				// Start the camera preview
 				mCamera.startPreview();
@@ -164,7 +177,7 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 
 		mFrameCount++;
 		Canvas canvas = null;
-		
+
 		try {
 
 			// lockCanvas returns null and throws an exception - might be an android issue - http://stackoverflow.com/search?q=SurfaceHolder.lockCanvas%28%29+returns+null
@@ -174,19 +187,44 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 			Camera.Parameters parameters = mCamera.getParameters();	    		
 			Size imageSize = parameters.getPreviewSize() ;
 
+
+			SharedPreferences prefs = getPreferences(0); 
+			mViewType = prefs.getString("ViewType", "BlurView");
+			 
+//			if ( mViewType.equals("NormalView") ){
+//				
+//				mCamera.stopPreview();
+//				//mCamera.setPreviewDisplay(mHolder);
+//				mCamera.startPreview();
+//				camera.addCallbackBuffer(yuvFrame);
+//				return ;
+//				
+//			}
+
+
 			//Bitmap rgbBitmap = RenderScriptHelper.convertYuvToRgb(mRs,data,imageSize);
 			Bitmap rgbBitmap = RenderScriptHelper.convertYuvToRgbIntrinsic(mRs,yuvFrame,imageSize );
-			//Bitmap grayScaleBitmap = RenderScriptHelper.applyGrayScaleEffectIntrinsic(mRs,rgbBitmap, imageSize);
-			Bitmap blurBitmap = RenderScriptHelper.applyBlurEffectIntrinsic(mRs,rgbBitmap,imageSize );
+			
+			Bitmap outBitmap  = null; 
+			if ( mViewType.equals("BlurView") ){
+				outBitmap = RenderScriptHelper.applyBlurEffectIntrinsic(mRs,rgbBitmap,imageSize );
+
+			}
+			else {
+				outBitmap = RenderScriptHelper.applyGrayScaleEffectIntrinsic(mRs,rgbBitmap, imageSize);
+				
+			}
+
+			
 
 			// Create an ImageView and set the output bitmap after manipulation (blur or gray scale) into it
 			ImageView image = new ImageView(this);
-			image.setImageBitmap(blurBitmap) ;
+			image.setImageBitmap(outBitmap) ;
 			// display the imageView 
 			setContentView(image) ;
 
 			//new PreviewAsyncTask().execute(data);// didn't see any improvement when running in Async task
-			
+
 			//canvas.drawBitmap(rgbBitmap, 0f, 0f, null) ;
 
 		}   finally {
@@ -219,27 +257,32 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 			return;
 		}
 
-		try {
-			// stop preview before making changes
-			mCamera.stopPreview();
-			mCamera.setPreviewDisplay(mHolder);
-			mCamera.startPreview();
-
-		} catch (Exception e){
-			Log.d(TAG, "Error starting camera preview: " + e.getMessage());
-		}
+//		try {
+//			
+//			
+//			
+//			// stop preview before making changes
+//			mCamera.stopPreview();
+//			mCamera.setPreviewDisplay(mHolder);
+//			mCamera.startPreview();
+//
+//		} catch (Exception e){
+//			Log.d(TAG, "Error starting camera preview: " + e.getMessage());
+//		}
 	}
-
 
 
 
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
+		
+		OptionsMenu.createMenu(this, menu);
+		return super.onCreateOptionsMenu(menu);
 		// Inflate the menu; this adds items to the action bar if it is present.
-		getMenuInflater().inflate(R.menu.main, menu);
+		//getMenuInflater().inflate(R.menu.main, menu);
 
-		return true;
+		//return true;
 	}
 
 
@@ -269,6 +312,17 @@ public class MainActivity extends Activity implements SurfaceHolder.Callback, Ca
 		}
 
 	}
+
+	
+	
+	   @Override
+	    public void onSharedPreferenceChanged(SharedPreferences preferences, String s) {
+	        //configure(preferences);
+	        
+	        String mViewType = preferences.getString("ViewType", "BlureView");
+	    }
+
+	 
 
 
 

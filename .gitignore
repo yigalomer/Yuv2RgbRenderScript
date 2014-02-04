@@ -35,3 +35,5 @@ gen/com/example/yuv2rgbrenderscript/ScriptC_Yuv2Rgb.java
 bin/resources.ap_
 
 bin/AndroidManifest.xml
+
+bin/Yuv2RgbRenderScript.apk.zip

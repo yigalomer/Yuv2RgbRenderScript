@@ -15,9 +15,6 @@ final class RenderScriptHelper {
 
 
 
-
-
-
 	// Convert to RGB using Intrinsic render script
 	public static Bitmap convertYuvToRgbIntrinsic(RenderScript rs,byte[] data, Size imageSize) {
 
@@ -26,7 +23,7 @@ final class RenderScriptHelper {
 
 		ScriptIntrinsicYuvToRGB yuvToRgbIntrinsic = ScriptIntrinsicYuvToRGB.create(rs, Element.RGBA_8888(rs));
 
-		// Create the input allocation
+		// Create the input allocation  memory for Renderscript to work with
 		Type.Builder yuvType = new Type.Builder(rs, Element.U8(rs))
 		.setX(imageWidth)
 		.setY(imageHeight)
@@ -116,6 +113,7 @@ final class RenderScriptHelper {
 
 		//Blur the image
 		ScriptIntrinsicBlur script = ScriptIntrinsicBlur.create(rs, Element.U8_4(rs));
+		// Set the blur radius
 		script.setRadius(15f);
 		script.setInput(aIn);
 		script.forEach(aOut);
